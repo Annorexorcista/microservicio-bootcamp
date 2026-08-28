@@ -75,4 +75,19 @@ class BootcampOpenApiIT {
                 .expectBody()
                 .jsonPath("$.paths['/api/v1/bootcamps'].post").exists();
     }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("/v3/api-docs contiene GET /api/v1/bootcamps con sus 4 parámetros")
+    void apiDocsContainsListEndpoint() {
+        webTestClient.get()
+                .uri("/v3/api-docs")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.paths['/api/v1/bootcamps'].get").exists()
+                .jsonPath("$.paths['/api/v1/bootcamps'].get.parameters[?(@.name=='page')]").exists()
+                .jsonPath("$.paths['/api/v1/bootcamps'].get.parameters[?(@.name=='size')]").exists()
+                .jsonPath("$.paths['/api/v1/bootcamps'].get.parameters[?(@.name=='sortBy')]").exists()
+                .jsonPath("$.paths['/api/v1/bootcamps'].get.parameters[?(@.name=='sortDirection')]").exists();
+    }
 }

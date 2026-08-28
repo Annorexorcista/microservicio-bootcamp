@@ -56,4 +56,28 @@ public class BootcampHandler {
                         .contentType(MediaType.APPLICATION_JSON)
                         .bodyValue(response));
     }
+
+    /**
+     * Lista los bootcamps de forma paginada y ordenada a partir de los query
+     * params de la solicitud.
+     *
+     * <p>Pipeline reactivo sin bloqueos: {@code fromCallable(toPageQuery) ->
+     * flatMap(listBootcamps) -> map(toPageResponse) -> flatMap(ServerResponse 200)}.
+     * El parseo de los query params se envuelve en {@code Mono.fromCallable} para
+     * que un valor inválido emerja como {@code Mono.error} y lo traduzca el handler
+     * global a 400. Los errores del dominio y del gateway se propagan igualmente.
+     *
+     * @param request la solicitud del servidor con los query params page, size,
+     *                sortBy y sortDirection.
+     * @return un {@link Mono} que emite la respuesta {@code 200 OK} con la página.
+     */
+    public Mono<ServerResponse> list(ServerRequest request) {
+        return Mono.fromCallable(() -> dtoMapper.toPageQuery(request))
+                .flatMap(servicePort::listBootcamps)
+                .map(dtoMapper::toPageResponse)
+                .flatMap(response -> ServerResponse
+                        .ok()
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .bodyValue(response));
+    }
 }

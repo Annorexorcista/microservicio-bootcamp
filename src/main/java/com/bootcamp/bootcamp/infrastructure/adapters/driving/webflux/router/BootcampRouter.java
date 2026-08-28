@@ -3,11 +3,14 @@ package com.bootcamp.bootcamp.infrastructure.adapters.driving.webflux.router;
 import static org.springframework.web.reactive.function.server.RequestPredicates.accept;
 
 import com.bootcamp.bootcamp.domain.api.IBootcampServicePort;
+import com.bootcamp.bootcamp.infrastructure.adapters.driving.webflux.dto.BootcampPageResponse;
 import com.bootcamp.bootcamp.infrastructure.adapters.driving.webflux.dto.BootcampRequest;
 import com.bootcamp.bootcamp.infrastructure.adapters.driving.webflux.dto.BootcampResponse;
 import com.bootcamp.bootcamp.infrastructure.adapters.driving.webflux.dto.ErrorResponse;
 import com.bootcamp.bootcamp.infrastructure.adapters.driving.webflux.handler.BootcampHandler;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
@@ -90,11 +93,73 @@ public class BootcampRouter {
                                             content = @Content(
                                                     mediaType = MediaType.APPLICATION_JSON_VALUE,
                                                     schema = @Schema(implementation = ErrorResponse.class)))
+                            })),
+            @RouterOperation(
+                    path = BOOTCAMPS_PATH,
+                    method = RequestMethod.GET,
+                    beanClass = IBootcampServicePort.class,
+                    beanMethod = "listBootcamps",
+                    operation = @Operation(
+                            operationId = "listBootcamps",
+                            summary = "Lista los bootcamps de forma paginada y ordenada",
+                            description = "Devuelve los bootcamps paginados (page, size) y "
+                                    + "ordenados por nombre o por la cantidad de capacidades "
+                                    + "asociadas, en dirección ascendente o descendente. Cada "
+                                    + "bootcamp incluye sus capacidades (id y nombre) y, dentro de "
+                                    + "cada capacidad, sus tecnologías (id y nombre), resueltas con "
+                                    + "una única llamada por lotes al Capability_Service.",
+                            parameters = {
+                                    @Parameter(
+                                            name = "page",
+                                            in = ParameterIn.QUERY,
+                                            description = "Número de página (base cero). Default 0.",
+                                            schema = @Schema(type = "integer", defaultValue = "0")),
+                                    @Parameter(
+                                            name = "size",
+                                            in = ParameterIn.QUERY,
+                                            description = "Tamaño de página (1-100). Default 10.",
+                                            schema = @Schema(type = "integer", defaultValue = "10")),
+                                    @Parameter(
+                                            name = "sortBy",
+                                            in = ParameterIn.QUERY,
+                                            description = "Criterio de ordenamiento. Default name.",
+                                            schema = @Schema(type = "string",
+                                                    allowableValues = {"name", "capabilityCount"},
+                                                    defaultValue = "name")),
+                                    @Parameter(
+                                            name = "sortDirection",
+                                            in = ParameterIn.QUERY,
+                                            description = "Dirección de ordenamiento. Default asc.",
+                                            schema = @Schema(type = "string",
+                                                    allowableValues = {"asc", "desc"},
+                                                    defaultValue = "asc"))
+                            },
+                            responses = {
+                                    @ApiResponse(
+                                            responseCode = "200",
+                                            description = "Página de bootcamps",
+                                            content = @Content(
+                                                    mediaType = MediaType.APPLICATION_JSON_VALUE,
+                                                    schema = @Schema(implementation = BootcampPageResponse.class))),
+                                    @ApiResponse(
+                                            responseCode = "400",
+                                            description = "Parámetros de paginación u ordenamiento inválidos",
+                                            content = @Content(
+                                                    mediaType = MediaType.APPLICATION_JSON_VALUE,
+                                                    schema = @Schema(implementation = ErrorResponse.class))),
+                                    @ApiResponse(
+                                            responseCode = "502",
+                                            description = "El Capability_Service no está disponible para "
+                                                    + "enriquecer las capacidades",
+                                            content = @Content(
+                                                    mediaType = MediaType.APPLICATION_JSON_VALUE,
+                                                    schema = @Schema(implementation = ErrorResponse.class)))
                             }))
     })
     public RouterFunction<ServerResponse> bootcampRoutes(BootcampHandler handler) {
         return RouterFunctions.route()
                 .POST(BOOTCAMPS_PATH, accept(MediaType.APPLICATION_JSON), handler::register)
+                .GET(BOOTCAMPS_PATH, accept(MediaType.APPLICATION_JSON), handler::list)
                 .build();
     }
 }
