@@ -2,6 +2,7 @@ package com.bootcamp.bootcamp.domain.spi;
 
 import com.bootcamp.bootcamp.domain.model.CapabilitySummary;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.util.Collection;
 
@@ -35,4 +36,15 @@ public interface ICapabilityGatewayPort {
      *         capacidad existente devuelta por el service (0..N).
      */
     Flux<CapabilitySummary> findCapabilitiesByIds(Collection<Long> ids);
+
+    /**
+     * Solicita al microservicio de Capacidad eliminar las capacidades indicadas
+     * (y, en cascada dentro de ese servicio, las tecnologías que queden huérfanas).
+     * Pensado para la eliminación de un bootcamp: se borran las capacidades que
+     * quedaron huérfanas (sin ningún otro bootcamp que las referencie).
+     *
+     * @param ids identificadores de capacidad a eliminar.
+     * @return un {@link Mono} que completa cuando el borrado ha terminado.
+     */
+    Mono<Void> deleteCapabilitiesByIds(Collection<Long> ids);
 }

@@ -38,4 +38,17 @@ public interface IBootcampServicePort {
      *         parámetros son inválidos o el Capability_Service no está disponible.
      */
     Mono<PagedResult<BootcampListItem>> listBootcamps(BootcampPageQuery query);
+
+    /**
+     * Elimina el bootcamp indicado junto con sus asociaciones a capacidades y, en
+     * cascada, las capacidades que queden huérfanas (sin ningún otro bootcamp que
+     * las referencie), delegando ese borrado en el microservicio de Capacidad (que
+     * a su vez borra en cascada las tecnologías huérfanas). La operación local es
+     * transaccional.
+     *
+     * @param id identificador del bootcamp a eliminar.
+     * @return un {@link Mono} que completa cuando el borrado (incluida la cascada)
+     *         ha terminado, o un error de dominio si el bootcamp no existe.
+     */
+    Mono<Void> deleteBootcamp(Long id);
 }

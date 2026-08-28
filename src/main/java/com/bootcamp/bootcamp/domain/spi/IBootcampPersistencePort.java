@@ -5,6 +5,8 @@ import com.bootcamp.bootcamp.domain.model.BootcampPageQuery;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
+
 /**
  * Puerto de salida (spi) del dominio para la persistencia de bootcamps.
  *
@@ -41,4 +43,24 @@ public interface IBootcampPersistencePort {
      * @return un {@link Mono} que emite el total de bootcamps.
      */
     Mono<Long> countAll();
+
+    /**
+     * Indica si existe un bootcamp con el identificador dado.
+     *
+     * @param id identificador del bootcamp.
+     * @return un {@link Mono} que emite {@code true} si existe, {@code false} si no.
+     */
+    Mono<Boolean> existsById(Long id);
+
+    /**
+     * Elimina el bootcamp indicado junto con sus asociaciones a capacidades, de
+     * forma atómica (transaccional), y devuelve los identificadores de las
+     * capacidades que quedaron huérfanas: aquellas que estaban asociadas al
+     * bootcamp borrado y que ya no son referenciadas por ningún otro bootcamp.
+     *
+     * @param id identificador del bootcamp a eliminar.
+     * @return un {@link Mono} que emite la lista de identificadores de capacidad
+     *         huérfanos (posiblemente vacía).
+     */
+    Mono<List<Long>> deleteByIdReturningOrphanCapabilityIds(Long id);
 }

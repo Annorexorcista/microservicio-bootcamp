@@ -80,4 +80,20 @@ public class BootcampHandler {
                         .contentType(MediaType.APPLICATION_JSON)
                         .bodyValue(response));
     }
+
+    /**
+     * Elimina el bootcamp indicado por la variable de ruta {@code id} y, en
+     * cascada, las capacidades y tecnologías que queden huérfanas. Responde
+     * {@code 204 No Content}; sin bloqueos. Un bootcamp inexistente se traduce a
+     * 404 y un fallo del Capability_Service a 502 por el handler global. Un
+     * {@code id} no numérico emerge como error y se traduce a 400.
+     *
+     * @param request la solicitud del servidor con la variable de ruta {@code id}.
+     * @return un {@link Mono} que emite la respuesta {@code 204 No Content}.
+     */
+    public Mono<ServerResponse> delete(ServerRequest request) {
+        return Mono.fromCallable(() -> Long.parseLong(request.pathVariable("id")))
+                .flatMap(servicePort::deleteBootcamp)
+                .then(ServerResponse.noContent().build());
+    }
 }

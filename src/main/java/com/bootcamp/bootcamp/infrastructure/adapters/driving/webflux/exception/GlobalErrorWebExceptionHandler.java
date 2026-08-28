@@ -1,5 +1,6 @@
 package com.bootcamp.bootcamp.infrastructure.adapters.driving.webflux.exception;
 
+import com.bootcamp.bootcamp.domain.exception.BootcampNotFoundException;
 import com.bootcamp.bootcamp.domain.exception.CapabilitiesNotFoundException;
 import com.bootcamp.bootcamp.domain.exception.CapabilityValidationUnavailableException;
 import com.bootcamp.bootcamp.domain.exception.InvalidBootcampDataException;
@@ -50,6 +51,7 @@ import reactor.core.publisher.Mono;
 public class GlobalErrorWebExceptionHandler extends AbstractErrorWebExceptionHandler {
 
     private static final String ERROR_CODE_BAD_REQUEST = "BAD_REQUEST";
+    private static final String ERROR_CODE_NOT_FOUND = "BOOTCAMP_NOT_FOUND";
     private static final String ERROR_CODE_CAPABILITIES_NOT_FOUND = "CAPABILITIES_NOT_FOUND";
     private static final String ERROR_CODE_BAD_GATEWAY = "CAPABILITY_VALIDATION_UNAVAILABLE";
     private static final String ERROR_CODE_INTERNAL_ERROR = "INTERNAL_ERROR";
@@ -96,6 +98,12 @@ public class GlobalErrorWebExceptionHandler extends AbstractErrorWebExceptionHan
                     HttpStatus.BAD_REQUEST,
                     invalidPageQuery.getCode().getCode(),
                     invalidPageQuery.getMessage());
+        }
+        if (error instanceof BootcampNotFoundException notFound) {
+            return buildErrorResponse(
+                    HttpStatus.NOT_FOUND,
+                    ERROR_CODE_NOT_FOUND,
+                    notFound.getMessage());
         }
         if (error instanceof CapabilitiesNotFoundException capabilitiesNotFound) {
             return buildErrorResponse(

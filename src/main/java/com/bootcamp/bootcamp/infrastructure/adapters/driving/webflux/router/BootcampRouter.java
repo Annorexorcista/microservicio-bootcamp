@@ -154,12 +154,51 @@ public class BootcampRouter {
                                             content = @Content(
                                                     mediaType = MediaType.APPLICATION_JSON_VALUE,
                                                     schema = @Schema(implementation = ErrorResponse.class)))
+                            })),
+            @RouterOperation(
+                    path = BOOTCAMPS_PATH + "/{id}",
+                    method = RequestMethod.DELETE,
+                    beanClass = IBootcampServicePort.class,
+                    beanMethod = "deleteBootcamp",
+                    operation = @Operation(
+                            operationId = "deleteBootcamp",
+                            summary = "Elimina un bootcamp (con cascada)",
+                            description = "Elimina el bootcamp indicado junto con sus asociaciones "
+                                    + "y, en cascada, las capacidades que queden huérfanas (sin "
+                                    + "ningún otro bootcamp que las referencie) y sus tecnologías "
+                                    + "huérfanas. La operación local es transaccional.",
+                            parameters = {
+                                    @Parameter(
+                                            name = "id",
+                                            in = ParameterIn.PATH,
+                                            required = true,
+                                            description = "Identificador del bootcamp a eliminar",
+                                            schema = @Schema(type = "integer", format = "int64"))
+                            },
+                            responses = {
+                                    @ApiResponse(
+                                            responseCode = "204",
+                                            description = "Bootcamp eliminado (sin contenido)"),
+                                    @ApiResponse(
+                                            responseCode = "404",
+                                            description = "El bootcamp no existe",
+                                            content = @Content(
+                                                    mediaType = MediaType.APPLICATION_JSON_VALUE,
+                                                    schema = @Schema(implementation = ErrorResponse.class))),
+                                    @ApiResponse(
+                                            responseCode = "502",
+                                            description = "El Capability_Service no está disponible para "
+                                                    + "la eliminación en cascada",
+                                            content = @Content(
+                                                    mediaType = MediaType.APPLICATION_JSON_VALUE,
+                                                    schema = @Schema(implementation = ErrorResponse.class)))
                             }))
     })
     public RouterFunction<ServerResponse> bootcampRoutes(BootcampHandler handler) {
         return RouterFunctions.route()
                 .POST(BOOTCAMPS_PATH, accept(MediaType.APPLICATION_JSON), handler::register)
                 .GET(BOOTCAMPS_PATH, accept(MediaType.APPLICATION_JSON), handler::list)
+                .DELETE(BOOTCAMPS_PATH + "/{id}", handler::delete)
                 .build();
     }
 }

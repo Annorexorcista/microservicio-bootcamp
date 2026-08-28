@@ -17,6 +17,8 @@ import reactor.core.publisher.Mono;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Adaptador driven que implementa el puerto de salida {@link IBootcampPersistencePort}
@@ -123,6 +125,51 @@ public class BootcampPersistenceAdapter implements IBootcampPersistencePort {
                         .map(BootcampCapabilityEntity::getCapabilityId)
                         .collectList()
                         .map(ids -> mapper.toDomain(entity, ids)));
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Delega en {@code existsById} del repositorio reactivo.
+     */
+    @Override
+    public Mono<Boolean> existsById(Long id) {
+        return bootcampRepository.existsById(id);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Dentro de una transacción reactiva: recolecta los {@code capabilityId} del
+     * bootcamp a borrar; elimina sus asociaciones y el bootcamp; y calcula las
+     * capacidades huérfanas comprobando cuáles de esos {@code capabilityId} ya no
+     * son referenciados por ningún otro bootcamp. Emite la lista de huérfanas.
+     */
+    @Override
+    public Mono<List<Long>> deleteByIdReturningOrphanCapabilityIds(Long id) {
+        Mono<List<Long>> pipeline = bootcampCapabilityRepository.findByBootcampId(id)
+                .map(BootcampCapabilityEntity::getCapabilityId)
+                .distinct()
+                .collectList()
+                .flatMap(candidates ->
+                        bootcampCapabilityRepository.deleteByBootcampId(id)
+                                .then(bootcampRepository.deleteById(id))
+                                .then(referencedAmong(candidates))
+                                .map(stillReferenced -> candidates.stream()
+                                        .filter(capId -> !stillReferenced.contains(capId))
+                                        .toList()));
+
+        return pipeline.as(transactionalOperator::transactional);
+    }
+
+    /** De las capacidades candidatas, devuelve el conjunto que aún tiene alguna asociación. */
+    private Mono<Set<Long>> referencedAmong(List<Long> candidateCapabilityIds) {
+        if (candidateCapabilityIds.isEmpty()) {
+            return Mono.just(Set.of());
+        }
+        return bootcampCapabilityRepository.findByCapabilityIdIn(candidateCapabilityIds)
+                .map(BootcampCapabilityEntity::getCapabilityId)
+                .collect(Collectors.toSet());
     }
 
     /**

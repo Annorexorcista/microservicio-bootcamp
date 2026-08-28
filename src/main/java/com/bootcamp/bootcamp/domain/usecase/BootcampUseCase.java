@@ -1,6 +1,7 @@
 package com.bootcamp.bootcamp.domain.usecase;
 
 import com.bootcamp.bootcamp.domain.api.IBootcampServicePort;
+import com.bootcamp.bootcamp.domain.exception.BootcampNotFoundException;
 import com.bootcamp.bootcamp.domain.exception.CapabilitiesNotFoundException;
 import com.bootcamp.bootcamp.domain.exception.DomainErrorCode;
 import com.bootcamp.bootcamp.domain.exception.InvalidBootcampDataException;
@@ -96,6 +97,25 @@ public class BootcampUseCase implements IBootcampServicePort {
                                             validQuery.getPage(), validQuery.getSize(),
                                             totalElements, items));
                         }));
+    }
+
+    /**
+     * Elimina el bootcamp y, en cascada, las capacidades que queden huérfanas.
+     * Verifica que el bootcamp exista (si no, emite {@link BootcampNotFoundException}
+     * → 404); la persistencia borra el bootcamp y sus asociaciones de forma
+     * transaccional y devuelve las capacidades huérfanas; esas se eliminan en el
+     * microservicio de Capacidad a través del gateway (que a su vez borra en
+     * cascada las tecnologías huérfanas). Sin {@code .block()}.
+     */
+    @Override
+    public Mono<Void> deleteBootcamp(Long id) {
+        return persistencePort.existsById(id)
+                .flatMap(exists -> Boolean.TRUE.equals(exists)
+                        ? persistencePort.deleteByIdReturningOrphanCapabilityIds(id)
+                        : Mono.error(new BootcampNotFoundException(id)))
+                .flatMap(orphanCapabilityIds -> orphanCapabilityIds.isEmpty()
+                        ? Mono.empty()
+                        : capabilityGatewayPort.deleteCapabilitiesByIds(orphanCapabilityIds));
     }
 
     /**
