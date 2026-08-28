@@ -4,15 +4,24 @@ import com.bootcamp.bootcamp.domain.api.IBootcampServicePort;
 import com.bootcamp.bootcamp.domain.exception.CapabilitiesNotFoundException;
 import com.bootcamp.bootcamp.domain.exception.DomainErrorCode;
 import com.bootcamp.bootcamp.domain.exception.InvalidBootcampDataException;
+import com.bootcamp.bootcamp.domain.exception.InvalidPageQueryException;
+import com.bootcamp.bootcamp.domain.exception.PageErrorCode;
 import com.bootcamp.bootcamp.domain.model.Bootcamp;
+import com.bootcamp.bootcamp.domain.model.BootcampListItem;
+import com.bootcamp.bootcamp.domain.model.BootcampPageQuery;
+import com.bootcamp.bootcamp.domain.model.CapabilitySummary;
+import com.bootcamp.bootcamp.domain.model.PagedResult;
 import com.bootcamp.bootcamp.domain.spi.IBootcampPersistencePort;
 import com.bootcamp.bootcamp.domain.spi.ICapabilityGatewayPort;
 import reactor.core.publisher.Mono;
 
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Caso de uso del dominio para el registro de bootcamps.
@@ -32,6 +41,9 @@ public class BootcampUseCase implements IBootcampServicePort {
     private static final int DESCRIPTION_MAX_LENGTH = 90;
     private static final int MIN_CAPABILITIES = 1;
     private static final int MAX_CAPABILITIES = 4;
+    private static final int MIN_PAGE = 0;
+    private static final int MIN_SIZE = 1;
+    private static final int MAX_SIZE = 100;
 
     private final IBootcampPersistencePort persistencePort;
     private final ICapabilityGatewayPort capabilityGatewayPort;
@@ -47,6 +59,91 @@ public class BootcampUseCase implements IBootcampServicePort {
         return validate(bootcamp)
                 .flatMap(this::ensureCapabilitiesExist)
                 .flatMap(persistencePort::save);
+    }
+
+    /**
+     * Lista los bootcamps de forma paginada y ordenada, componiendo un único
+     * pipeline reactivo sin llamadas bloqueantes:
+     * <ol>
+     *   <li>valida el rango de {@code page}/{@code size} (Req 4.3-4.6);</li>
+     *   <li>obtiene, en paralelo, la página desde la BD (ya ordenada y paginada) y
+     *       el conteo total (Req 1.1, 1.2);</li>
+     *   <li>si la página está vacía, omite el gateway y retorna un
+     *       {@link PagedResult} vacío con la metadata coherente (Req 1.4, 5.6);</li>
+     *   <li>en caso contrario, enriquece cada bootcamp con sus capacidades y
+     *       tecnologías mediante una única llamada por lotes (Req 5).</li>
+     * </ol>
+     *
+     * <p>El orden emitido por {@code findPage} se preserva. El error de
+     * indisponibilidad del Capability_Service se propaga sin capturarse (Req 7.1).
+     */
+    @Override
+    public Mono<PagedResult<BootcampListItem>> listBootcamps(BootcampPageQuery query) {
+        return validateQuery(query)
+                .flatMap(validQuery -> Mono.zip(
+                                persistencePort.findPage(validQuery).collectList(),
+                                persistencePort.countAll())
+                        .flatMap(tuple -> {
+                            List<Bootcamp> pageContent = tuple.getT1();
+                            long totalElements = tuple.getT2();
+                            if (pageContent.isEmpty()) {
+                                return Mono.just(new PagedResult<BootcampListItem>(
+                                        validQuery.getPage(), validQuery.getSize(),
+                                        totalElements, List.of()));
+                            }
+                            return enrichWithCapabilities(pageContent)
+                                    .map(items -> new PagedResult<>(
+                                            validQuery.getPage(), validQuery.getSize(),
+                                            totalElements, items));
+                        }));
+    }
+
+    /**
+     * Valida el rango de los parámetros de paginación en memoria (sin I/O):
+     * {@code page < 0} -> {@code PAGE_NEGATIVE}; {@code size < 1} ->
+     * {@code SIZE_TOO_SMALL}; {@code size > 100} -> {@code SIZE_TOO_LARGE}. Los
+     * valores de {@code sortBy}/{@code direction} ya llegan resueltos a enum (o al
+     * default) desde la capa driving.
+     */
+    private Mono<BootcampPageQuery> validateQuery(BootcampPageQuery query) {
+        return Mono.defer(() -> {
+            if (query.getPage() < MIN_PAGE) {
+                return Mono.error(new InvalidPageQueryException(PageErrorCode.PAGE_NEGATIVE));
+            }
+            if (query.getSize() < MIN_SIZE) {
+                return Mono.error(new InvalidPageQueryException(PageErrorCode.SIZE_TOO_SMALL));
+            }
+            if (query.getSize() > MAX_SIZE) {
+                return Mono.error(new InvalidPageQueryException(PageErrorCode.SIZE_TOO_LARGE));
+            }
+            return Mono.just(query);
+        });
+    }
+
+    /**
+     * Enriquece los bootcamps de la página con sus capacidades y tecnologías,
+     * evitando el problema N+1: recolecta todos los {@code capabilityId} distintos
+     * de la página (preservando el orden de aparición) y hace una única llamada por
+     * lotes al gateway; con el mapa {@code id -> CapabilitySummary} resultante,
+     * asocia a cada bootcamp únicamente las capacidades resueltas (omitiendo las no
+     * devueltas por el service, Req 5.5), preservando el orden de la página.
+     */
+    private Mono<List<BootcampListItem>> enrichWithCapabilities(List<Bootcamp> page) {
+        Set<Long> distinctIds = page.stream()
+                .flatMap(b -> b.getCapabilityIds().stream())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        return capabilityGatewayPort.findCapabilitiesByIds(distinctIds)
+                .collectMap(CapabilitySummary::getId, Function.identity())
+                .map(byId -> page.stream()
+                        .map(b -> new BootcampListItem(
+                                b.getId(), b.getName(), b.getDescription(),
+                                b.getLaunchDate(), b.getDurationInDays(),
+                                b.getCapabilityIds().stream()
+                                        .map(byId::get)
+                                        .filter(Objects::nonNull)
+                                        .toList()))
+                        .toList());
     }
 
     /**

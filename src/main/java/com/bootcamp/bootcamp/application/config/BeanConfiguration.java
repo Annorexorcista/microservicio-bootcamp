@@ -7,6 +7,7 @@ import com.bootcamp.bootcamp.domain.usecase.BootcampUseCase;
 import com.bootcamp.bootcamp.infrastructure.adapters.driven.http.CapabilityGatewayAdapter;
 import com.bootcamp.bootcamp.infrastructure.adapters.driven.r2dbc.adapter.BootcampPersistenceAdapter;
 import com.bootcamp.bootcamp.infrastructure.adapters.driven.r2dbc.mapper.BootcampEntityMapper;
+import com.bootcamp.bootcamp.infrastructure.adapters.driven.r2dbc.repository.IBootcampCapabilityRepository;
 import com.bootcamp.bootcamp.infrastructure.adapters.driven.r2dbc.repository.IBootcampRepository;
 import com.bootcamp.bootcamp.infrastructure.adapters.driving.webflux.handler.BootcampHandler;
 import com.bootcamp.bootcamp.infrastructure.adapters.driving.webflux.mapper.BootcampDtoMapper;
@@ -35,11 +36,13 @@ public class BeanConfiguration {
     @Bean
     public IBootcampPersistencePort bootcampPersistencePort(
             IBootcampRepository bootcampRepository,
+            IBootcampCapabilityRepository bootcampCapabilityRepository,
             BootcampEntityMapper mapper,
             TransactionalOperator transactionalOperator,
             R2dbcEntityTemplate entityTemplate) {
         return new BootcampPersistenceAdapter(
-                bootcampRepository, mapper, transactionalOperator, entityTemplate);
+                bootcampRepository, bootcampCapabilityRepository, mapper,
+                transactionalOperator, entityTemplate);
     }
 
     /**

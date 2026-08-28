@@ -1,6 +1,9 @@
 package com.bootcamp.bootcamp.infrastructure.adapters.driven.r2dbc.adapter;
 
 import com.bootcamp.bootcamp.domain.model.Bootcamp;
+import com.bootcamp.bootcamp.domain.model.BootcampPageQuery;
+import com.bootcamp.bootcamp.domain.model.BootcampSortBy;
+import com.bootcamp.bootcamp.domain.model.BootcampSortDirection;
 import com.bootcamp.bootcamp.infrastructure.adapters.driven.r2dbc.entity.BootcampCapabilityEntity;
 import com.bootcamp.bootcamp.infrastructure.adapters.driven.r2dbc.mapper.BootcampEntityMapper;
 import com.bootcamp.bootcamp.infrastructure.adapters.driven.r2dbc.repository.IBootcampCapabilityRepository;
@@ -103,6 +106,7 @@ class BootcampPersistenceAdapterIT {
 
         this.adapter = new BootcampPersistenceAdapter(
                 bootcampRepository,
+                bootcampCapabilityRepository,
                 new BootcampEntityMapper(),
                 transactionalOperator,
                 entityTemplate);
@@ -175,6 +179,83 @@ class BootcampPersistenceAdapterIT {
 
         StepVerifier.create(bootcampCapabilityRepository.findByBootcampId(generatedId).count())
                 .expectNext(1L)
+                .verifyComplete();
+    }
+
+    // --- findPage / countAll (HU5) ---
+
+    private BootcampPageQuery query(int page, int size,
+                                    BootcampSortBy sortBy, BootcampSortDirection dir) {
+        return new BootcampPageQuery(page, size, sortBy, dir);
+    }
+
+    /** Siembra: "Beta"(2 caps), "Alfa"(1 cap), "Gamma"(0 caps). */
+    private void seedForListing() {
+        bootcampCapabilityRepository.deleteAll().block();
+        bootcampRepository.deleteAll().block();
+        adapter.save(new Bootcamp(null, "Beta", "d", LocalDate.of(2026, 3, 1), 30, List.of(1L, 2L))).block();
+        adapter.save(new Bootcamp(null, "Alfa", "d", LocalDate.of(2026, 3, 1), 30, List.of(1L))).block();
+        // "Gamma" sin capacidades: se inserta sin filas en la tabla puente.
+        bootcampRepository.save(new com.bootcamp.bootcamp.infrastructure.adapters.driven.r2dbc.entity
+                .BootcampEntity(null, "Gamma", "d", LocalDate.of(2026, 3, 1), 30)).block();
+    }
+
+    @Test
+    void findPage_orderByNameAscAndDesc() {
+        seedForListing();
+
+        StepVerifier.create(adapter.findPage(query(0, 10, BootcampSortBy.NAME, BootcampSortDirection.ASC))
+                        .map(Bootcamp::getName).collectList())
+                .assertNext(names -> assertThat(names).containsExactly("Alfa", "Beta", "Gamma"))
+                .verifyComplete();
+
+        StepVerifier.create(adapter.findPage(query(0, 10, BootcampSortBy.NAME, BootcampSortDirection.DESC))
+                        .map(Bootcamp::getName).collectList())
+                .assertNext(names -> assertThat(names).containsExactly("Gamma", "Beta", "Alfa"))
+                .verifyComplete();
+    }
+
+    @Test
+    void findPage_orderByCapabilityCount() {
+        seedForListing();
+
+        // Gamma(0) primero asc, Beta(2) último asc.
+        StepVerifier.create(adapter.findPage(query(0, 10, BootcampSortBy.CAPABILITY_COUNT,
+                                BootcampSortDirection.ASC))
+                        .map(Bootcamp::getName).collectList())
+                .assertNext(names -> assertThat(names).containsExactly("Gamma", "Alfa", "Beta"))
+                .verifyComplete();
+    }
+
+    @Test
+    void findPage_limitOffsetReturnsWindow() {
+        seedForListing();
+
+        StepVerifier.create(adapter.findPage(query(1, 2, BootcampSortBy.NAME, BootcampSortDirection.ASC))
+                        .map(Bootcamp::getName).collectList())
+                .assertNext(names -> assertThat(names).containsExactly("Gamma"))
+                .verifyComplete();
+    }
+
+    @Test
+    void findPage_resolvesCapabilityIds() {
+        seedForListing();
+
+        StepVerifier.create(adapter.findPage(query(0, 1, BootcampSortBy.NAME, BootcampSortDirection.ASC))
+                        .collectList())
+                .assertNext(list -> {
+                    assertThat(list.get(0).getName()).isEqualTo("Alfa");
+                    assertThat(list.get(0).getCapabilityIds()).containsExactly(1L);
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void countAll_returnsTotal() {
+        seedForListing();
+
+        StepVerifier.create(adapter.countAll())
+                .expectNext(3L)
                 .verifyComplete();
     }
 }

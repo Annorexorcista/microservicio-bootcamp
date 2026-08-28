@@ -3,6 +3,7 @@ package com.bootcamp.bootcamp.infrastructure.adapters.driving.webflux.exception;
 import com.bootcamp.bootcamp.domain.exception.CapabilitiesNotFoundException;
 import com.bootcamp.bootcamp.domain.exception.CapabilityValidationUnavailableException;
 import com.bootcamp.bootcamp.domain.exception.InvalidBootcampDataException;
+import com.bootcamp.bootcamp.domain.exception.InvalidPageQueryException;
 import com.bootcamp.bootcamp.infrastructure.adapters.driving.webflux.dto.ErrorResponse;
 
 import java.time.Instant;
@@ -89,6 +90,12 @@ public class GlobalErrorWebExceptionHandler extends AbstractErrorWebExceptionHan
                     HttpStatus.BAD_REQUEST,
                     invalidData.getCode().getCode(),
                     invalidData.getMessage());
+        }
+        if (error instanceof InvalidPageQueryException invalidPageQuery) {
+            return buildErrorResponse(
+                    HttpStatus.BAD_REQUEST,
+                    invalidPageQuery.getCode().getCode(),
+                    invalidPageQuery.getMessage());
         }
         if (error instanceof CapabilitiesNotFoundException capabilitiesNotFound) {
             return buildErrorResponse(

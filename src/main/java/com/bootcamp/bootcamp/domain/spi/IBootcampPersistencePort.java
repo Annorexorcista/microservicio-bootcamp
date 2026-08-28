@@ -1,6 +1,8 @@
 package com.bootcamp.bootcamp.domain.spi;
 
 import com.bootcamp.bootcamp.domain.model.Bootcamp;
+import com.bootcamp.bootcamp.domain.model.BootcampPageQuery;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 /**
@@ -21,4 +23,22 @@ public interface IBootcampPersistencePort {
      *         identificador asignado.
      */
     Mono<Bootcamp> save(Bootcamp bootcamp);
+
+    /**
+     * Recupera la página de bootcamps ya ordenada y paginada en la base de datos
+     * según los parámetros de consulta (LIMIT/OFFSET y ORDER BY resueltos en SQL).
+     * Cada {@link Bootcamp} emitido incluye sus {@code capabilityIds} resueltos; el
+     * orden de emisión es el orden de la consulta.
+     *
+     * @param query parámetros de consulta (page, size, sortBy, direction).
+     * @return un {@link Flux} con los bootcamps de la página solicitada.
+     */
+    Flux<Bootcamp> findPage(BootcampPageQuery query);
+
+    /**
+     * Cuenta el total de bootcamps existentes, para la metadata de paginación.
+     *
+     * @return un {@link Mono} que emite el total de bootcamps.
+     */
+    Mono<Long> countAll();
 }
