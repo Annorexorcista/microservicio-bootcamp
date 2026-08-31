@@ -2,13 +2,6 @@ package com.bootcamp.bootcamp.domain.model;
 
 import java.util.List;
 
-/**
- * Modelo de dominio reducido de una capacidad para el listado de bootcamps:
- * identificador, nombre y su listado de tecnologías (id y nombre).
- *
- * <p>Se obtiene del Capability_Service mediante la consulta por ids, que ya
- * devuelve cada capacidad con sus tecnologías resueltas.
- */
 public final class CapabilitySummary {
 
     private final Long id;

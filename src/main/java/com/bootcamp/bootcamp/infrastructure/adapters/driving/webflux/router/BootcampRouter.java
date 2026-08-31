@@ -25,30 +25,11 @@ import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.RouterFunctions;
 import org.springframework.web.reactive.function.server.ServerResponse;
 
-/**
- * Router de la capa driving (WebFlux funcional) que declara las rutas del recurso
- * {@code bootcamps} y las asocia al {@link BootcampHandler}.
- *
- * <p>Los endpoints funcionales ({@code RouterFunction}) no exponen su contrato
- * automáticamente a springdoc como lo hacen los {@code @RestController}. Por ello
- * la documentación OpenAPI del endpoint se declara de forma explícita con las
- * anotaciones {@link RouterOperations}/{@link RouterOperation} sobre el método
- * que produce el bean {@code RouterFunction}, describiendo el esquema de la
- * solicitud, el de la respuesta {@code 201} y los errores {@code 400}/{@code 502}
- * (Requerimiento 9.1).
- */
 @Configuration
 public class BootcampRouter {
 
     private static final String BOOTCAMPS_PATH = "/api/v1/bootcamps";
 
-    /**
-     * Declara la ruta {@code POST /api/v1/bootcamps} (que acepta
-     * {@code application/json}) y la delega en {@link BootcampHandler#register}.
-     *
-     * @param handler handler que procesa el registro de bootcamps.
-     * @return la {@link RouterFunction} con la ruta de registro configurada.
-     */
     @Bean
     @RouterOperations({
             @RouterOperation(
@@ -154,12 +135,57 @@ public class BootcampRouter {
                                             content = @Content(
                                                     mediaType = MediaType.APPLICATION_JSON_VALUE,
                                                     schema = @Schema(implementation = ErrorResponse.class)))
+                            })),
+            @RouterOperation(
+                    path = BOOTCAMPS_PATH + "/{id}",
+                    method = RequestMethod.DELETE,
+                    beanClass = IBootcampServicePort.class,
+                    beanMethod = "deleteBootcamp",
+                    operation = @Operation(
+                            operationId = "deleteBootcamp",
+                            summary = "Elimina un bootcamp (con cascada)",
+                            description = "Elimina el bootcamp indicado junto con sus asociaciones "
+                                    + "y, en cascada, las capacidades que queden huérfanas (sin "
+                                    + "ningún otro bootcamp que las referencie) y sus tecnologías "
+                                    + "huérfanas. La operación local es transaccional.",
+                            parameters = {
+                                    @Parameter(
+                                            name = "id",
+                                            in = ParameterIn.PATH,
+                                            required = true,
+                                            description = "Identificador del bootcamp a eliminar",
+                                            schema = @Schema(type = "integer", format = "int64"))
+                            },
+                            responses = {
+                                    @ApiResponse(
+                                            responseCode = "204",
+                                            description = "Bootcamp eliminado (sin contenido)"),
+                                    @ApiResponse(
+                                            responseCode = "400",
+                                            description = "El identificador del bootcamp es inválido",
+                                            content = @Content(
+                                                    mediaType = MediaType.APPLICATION_JSON_VALUE,
+                                                    schema = @Schema(implementation = ErrorResponse.class))),
+                                    @ApiResponse(
+                                            responseCode = "404",
+                                            description = "El bootcamp no existe",
+                                            content = @Content(
+                                                    mediaType = MediaType.APPLICATION_JSON_VALUE,
+                                                    schema = @Schema(implementation = ErrorResponse.class))),
+                                    @ApiResponse(
+                                            responseCode = "502",
+                                            description = "El Capability_Service no está disponible para "
+                                                    + "la eliminación en cascada",
+                                            content = @Content(
+                                                    mediaType = MediaType.APPLICATION_JSON_VALUE,
+                                                    schema = @Schema(implementation = ErrorResponse.class)))
                             }))
     })
     public RouterFunction<ServerResponse> bootcampRoutes(BootcampHandler handler) {
         return RouterFunctions.route()
                 .POST(BOOTCAMPS_PATH, accept(MediaType.APPLICATION_JSON), handler::register)
                 .GET(BOOTCAMPS_PATH, accept(MediaType.APPLICATION_JSON), handler::list)
+                .DELETE(BOOTCAMPS_PATH + "/{id}", handler::delete)
                 .build();
     }
 }

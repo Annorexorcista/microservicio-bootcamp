@@ -6,19 +6,6 @@ import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.LocalDate;
 
-/**
- * Entidad de persistencia R2DBC mapeada a la tabla {@code bootcamp}.
- *
- * <p>Representa una fila de la tabla y se usa únicamente en la capa driven. El
- * mapeo entre esta entidad y el modelo de dominio {@code Bootcamp} lo realiza
- * {@code BootcampEntityMapper}, de modo que el dominio permanece libre de
- * anotaciones de framework.
- *
- * <p>Cuando {@code id} es {@code null}, Spring Data R2DBC considera que la fila
- * es nueva y ejecuta un {@code INSERT}; MySQL asigna el valor autoincremental.
- * Se exponen constructor sin argumentos, constructor con todos los argumentos y
- * getters/setters porque R2DBC los necesita para hidratar la entidad.
- */
 @Table("bootcamp")
 public class BootcampEntity {
 

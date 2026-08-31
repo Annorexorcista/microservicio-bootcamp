@@ -2,6 +2,8 @@ package com.bootcamp.bootcamp.infrastructure.adapters.driving.webflux.handler;
 
 import com.bootcamp.bootcamp.domain.api.IBootcampServicePort;
 import com.bootcamp.bootcamp.infrastructure.adapters.driving.webflux.dto.BootcampRequest;
+import com.bootcamp.bootcamp.infrastructure.adapters.driving.webflux.exception.InvalidPathVariableException;
+import com.bootcamp.bootcamp.infrastructure.adapters.driving.webflux.exception.RequestErrorCode;
 import com.bootcamp.bootcamp.infrastructure.adapters.driving.webflux.mapper.BootcampDtoMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -9,22 +11,6 @@ import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.reactive.function.server.ServerResponse;
 import reactor.core.publisher.Mono;
 
-/**
- * Handler de la capa driving (WebFlux funcional) para el registro de bootcamps.
- *
- * <p>Compone un pipeline reactivo de extremo a extremo, sin llamadas bloqueantes
- * ({@code .block()}): deserializa el cuerpo de la solicitud a {@link BootcampRequest},
- * lo mapea al modelo de dominio, delega en el puerto de entrada
- * {@link IBootcampServicePort}, mapea el resultado a DTO de respuesta y construye
- * la respuesta {@code 201 Created}.
- *
- * <p>El manejo de errores no ocurre aquí: cualquier {@code Mono.error} emitido por
- * el caso de uso (validación, existencia de capacidades) o por la deserialización
- * fluye por el pipeline y lo traduce el handler global de errores.
- *
- * <p>Se construye como bean en {@code BeanConfiguration}, por lo que la clase no
- * lleva la anotación {@code @Component}. Las dependencias se inyectan por constructor.
- */
 public class BootcampHandler {
 
     private final IBootcampServicePort servicePort;
@@ -35,17 +21,6 @@ public class BootcampHandler {
         this.dtoMapper = dtoMapper;
     }
 
-    /**
-     * Registra un bootcamp a partir de la solicitud HTTP.
-     *
-     * <p>Pipeline reactivo: {@code bodyToMono -> map(toDomain) ->
-     * flatMap(registerBootcamp) -> map(toResponse) -> flatMap(ServerResponse 201)}.
-     * Los errores se propagan hacia el handler global; aquí no se capturan.
-     *
-     * @param request la solicitud del servidor con el cuerpo {@link BootcampRequest}.
-     * @return un {@link Mono} que emite la respuesta {@code 201 Created} con el DTO
-     *         del bootcamp creado, o propaga el error correspondiente.
-     */
     public Mono<ServerResponse> register(ServerRequest request) {
         return request.bodyToMono(BootcampRequest.class)
                 .map(dtoMapper::toDomain)
@@ -57,20 +32,6 @@ public class BootcampHandler {
                         .bodyValue(response));
     }
 
-    /**
-     * Lista los bootcamps de forma paginada y ordenada a partir de los query
-     * params de la solicitud.
-     *
-     * <p>Pipeline reactivo sin bloqueos: {@code fromCallable(toPageQuery) ->
-     * flatMap(listBootcamps) -> map(toPageResponse) -> flatMap(ServerResponse 200)}.
-     * El parseo de los query params se envuelve en {@code Mono.fromCallable} para
-     * que un valor inválido emerja como {@code Mono.error} y lo traduzca el handler
-     * global a 400. Los errores del dominio y del gateway se propagan igualmente.
-     *
-     * @param request la solicitud del servidor con los query params page, size,
-     *                sortBy y sortDirection.
-     * @return un {@link Mono} que emite la respuesta {@code 200 OK} con la página.
-     */
     public Mono<ServerResponse> list(ServerRequest request) {
         return Mono.fromCallable(() -> dtoMapper.toPageQuery(request))
                 .flatMap(servicePort::listBootcamps)
@@ -79,5 +40,32 @@ public class BootcampHandler {
                         .ok()
                         .contentType(MediaType.APPLICATION_JSON)
                         .bodyValue(response));
+    }
+
+    public Mono<ServerResponse> delete(ServerRequest request) {
+        return Mono.fromCallable(() -> parseBootcampId(request.pathVariable("id")))
+                .flatMap(servicePort::deleteBootcamp)
+                .then(ServerResponse.noContent().build());
+    }
+
+    private Long parseBootcampId(String rawId) {
+        if (rawId == null || rawId.isBlank()) {
+            throw new InvalidPathVariableException(RequestErrorCode.ID_REQUIRED);
+        }
+        String cleanId = rawId.trim();
+        if (!cleanId.matches("[0-9]+")) {
+            throw new InvalidPathVariableException(RequestErrorCode.ID_NOT_NUMERIC, cleanId);
+        }
+
+        try {
+            long id = Long.parseLong(cleanId);
+            if (id <= 0) {
+                throw new InvalidPathVariableException(RequestErrorCode.ID_NOT_POSITIVE, cleanId);
+            }
+            return id;
+        } catch (NumberFormatException exception) {
+            throw new InvalidPathVariableException(
+                    RequestErrorCode.ID_OUT_OF_RANGE, exception, cleanId);
+        }
     }
 }

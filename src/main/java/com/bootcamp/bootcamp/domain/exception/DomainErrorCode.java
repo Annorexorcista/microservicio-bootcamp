@@ -1,13 +1,5 @@
 package com.bootcamp.bootcamp.domain.exception;
 
-/**
- * Códigos de error de negocio del dominio de bootcamps.
- *
- * <p>Cada código asocia una regla de validación sintáctica (obligatoriedad,
- * longitudes, fecha, duración, cantidad y no repetición de capacidades) con su
- * mensaje de negocio, manteniendo los textos centralizados y libres de
- * acoplamiento HTTP.
- */
 public enum DomainErrorCode {
 
     NAME_REQUIRED("El nombre es obligatorio"),
@@ -26,16 +18,10 @@ public enum DomainErrorCode {
         this.message = message;
     }
 
-    /**
-     * @return el código de negocio (nombre de la constante del enum).
-     */
     public String getCode() {
         return name();
     }
 
-    /**
-     * @return el mensaje de negocio asociado al código de error.
-     */
     public String getMessage() {
         return message;
     }

@@ -6,17 +6,6 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
-/**
- * Mapper puro (sin I/O ni tipos reactivos) que convierte entre el modelo de
- * dominio {@link Bootcamp} y la entidad de persistencia {@link BootcampEntity}.
- *
- * <p>Las conversiones son transformaciones en memoria; se invocan dentro del
- * pipeline reactivo del adaptador, por lo que este componente no conoce Project
- * Reactor ni R2DBC. La asociación N:M con las capacidades no se representa en
- * {@link BootcampEntity} (vive en la tabla puente), por lo que
- * {@link #toDomain(BootcampEntity, List)} recibe los identificadores de
- * capacidad por separado.
- */
 @Component
 public class BootcampEntityMapper {
 

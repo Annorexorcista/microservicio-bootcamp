@@ -17,27 +17,9 @@ import reactor.core.publisher.Mono;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
-/**
- * Adaptador driven que implementa el puerto de salida {@link IBootcampPersistencePort}
- * usando Spring Data R2DBC.
- *
- * <p>Persiste en dos tablas dentro de una transacción reactiva: primero
- * {@code bootcamp} (obteniendo el id autogenerado por MySQL) y luego las filas de
- * la tabla puente {@code bootcamp_capability} (una por cada capacidad asociada).
- * Ambas escrituras se envuelven en un {@link TransactionalOperator} mediante
- * {@code .as(transactionalOperator::transactional)}, de forma que fallen o
- * confirmen de manera atómica (Req 1.2).
- *
- * <p>La entidad {@link BootcampCapabilityEntity} tiene clave primaria compuesta y
- * no un {@code @Id} de una sola columna, por lo que el guardado de sus filas se
- * hace con {@link R2dbcEntityTemplate#insert(Object)} (que siempre ejecuta un
- * INSERT) en lugar de {@code saveAll}.
- *
- * <p>No se anota con {@code @Component}: el wiring hexagonal se realiza en
- * {@code BeanConfiguration}. Es un flujo totalmente reactivo, sin llamadas
- * bloqueantes ({@code .block()}).
- */
 public class BootcampPersistenceAdapter implements IBootcampPersistencePort {
 
     private final IBootcampRepository bootcampRepository;
@@ -58,14 +40,6 @@ public class BootcampPersistenceAdapter implements IBootcampPersistencePort {
         this.entityTemplate = entityTemplate;
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * <p>Guarda la entidad {@code bootcamp} para obtener el id generado, inserta
-     * una fila en {@code bootcamp_capability} por cada capacidad asociada y
-     * reconstruye el modelo de dominio con el id y los mismos identificadores de
-     * capacidad. Todo dentro de una transacción reactiva.
-     */
     @Override
     public Mono<Bootcamp> save(Bootcamp bootcamp) {
         Mono<Bootcamp> pipeline = bootcampRepository
@@ -81,30 +55,11 @@ public class BootcampPersistenceAdapter implements IBootcampPersistencePort {
         return pipeline.as(transactionalOperator::transactional);
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * <p>Delega en {@code count()} del repositorio reactivo.
-     */
     @Override
     public Mono<Long> countAll() {
         return bootcampRepository.count();
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * <p>Ejecuta la consulta paginada y ordenada en la base de datos (LIMIT/OFFSET
-     * y ORDER BY resueltos en SQL). Para {@code NAME} ordena por {@code b.name};
-     * para {@code CAPABILITY_COUNT} calcula el conteo con {@code LEFT JOIN} sobre la
-     * tabla puente, {@code GROUP BY} por bootcamp y {@code COUNT}. El
-     * {@code sortBy}/{@code direction} se traducen desde los enums a fragmentos SQL
-     * de una lista blanca, evitando inyección.
-     *
-     * <p>Tras obtener los bootcamps de la página (en el orden de la consulta),
-     * resuelve los {@code capabilityIds} de cada uno con {@code findByBootcampId}
-     * usando {@code concatMap} para preservar ese orden.
-     */
     @Override
     public Flux<Bootcamp> findPage(BootcampPageQuery query) {
         long offset = (long) query.getPage() * query.getSize();
@@ -125,10 +80,37 @@ public class BootcampPersistenceAdapter implements IBootcampPersistencePort {
                         .map(ids -> mapper.toDomain(entity, ids)));
     }
 
-    /**
-     * Construye el SQL de la página traduciendo {@code sortBy}/{@code direction}
-     * a fragmentos fijos de una lista blanca (sin interpolar entrada de usuario).
-     */
+    @Override
+    public Mono<Boolean> existsById(Long id) {
+        return bootcampRepository.existsById(id);
+    }
+
+    @Override
+    public Mono<List<Long>> deleteByIdReturningOrphanCapabilityIds(Long id) {
+        Mono<List<Long>> pipeline = bootcampCapabilityRepository.findByBootcampId(id)
+                .map(BootcampCapabilityEntity::getCapabilityId)
+                .distinct()
+                .collectList()
+                .flatMap(candidates ->
+                        bootcampCapabilityRepository.deleteByBootcampId(id)
+                                .then(bootcampRepository.deleteById(id))
+                                .then(referencedAmong(candidates))
+                                .map(stillReferenced -> candidates.stream()
+                                        .filter(capId -> !stillReferenced.contains(capId))
+                                        .toList()));
+
+        return pipeline.as(transactionalOperator::transactional);
+    }
+
+    private Mono<Set<Long>> referencedAmong(List<Long> candidateCapabilityIds) {
+        if (candidateCapabilityIds.isEmpty()) {
+            return Mono.just(Set.of());
+        }
+        return bootcampCapabilityRepository.findByCapabilityIdIn(candidateCapabilityIds)
+                .map(BootcampCapabilityEntity::getCapabilityId)
+                .collect(Collectors.toSet());
+    }
+
     private String buildPageSql(BootcampSortBy sortBy, BootcampSortDirection direction) {
         String dir = direction == BootcampSortDirection.DESC ? "DESC" : "ASC";
         if (sortBy == BootcampSortBy.CAPABILITY_COUNT) {

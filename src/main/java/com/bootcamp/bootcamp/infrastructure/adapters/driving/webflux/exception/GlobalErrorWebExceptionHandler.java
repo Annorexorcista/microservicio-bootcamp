@@ -1,5 +1,6 @@
 package com.bootcamp.bootcamp.infrastructure.adapters.driving.webflux.exception;
 
+import com.bootcamp.bootcamp.domain.exception.BootcampNotFoundException;
 import com.bootcamp.bootcamp.domain.exception.CapabilitiesNotFoundException;
 import com.bootcamp.bootcamp.domain.exception.CapabilityValidationUnavailableException;
 import com.bootcamp.bootcamp.domain.exception.InvalidBootcampDataException;
@@ -26,30 +27,12 @@ import org.springframework.web.server.ServerWebInputException;
 
 import reactor.core.publisher.Mono;
 
-/**
- * Manejador global de errores reactivo para la capa driving (WebFlux).
- *
- * <p>Intercepta las excepciones que emergen del pipeline reactivo y las traduce a
- * respuestas HTTP con un cuerpo {@link ErrorResponse} uniforme, sin bloquear
- * (todo se compone con operadores de Project Reactor, retornando
- * {@link Mono Mono&lt;ServerResponse&gt;}).
- *
- * <ul>
- *   <li>{@link InvalidBootcampDataException} -&gt; 400 Bad Request</li>
- *   <li>{@link CapabilitiesNotFoundException} -&gt; 400 Bad Request</li>
- *   <li>{@link CapabilityValidationUnavailableException} -&gt; 502 Bad Gateway</li>
- *   <li>{@link ServerWebInputException} (JSON inválido / body faltante) -&gt; 400 Bad Request</li>
- *   <li>Cualquier otra excepción -&gt; 500 Internal Server Error</li>
- * </ul>
- *
- * <p>Se registra con {@code @Order(-2)} para tener precedencia sobre el
- * {@code DefaultErrorWebExceptionHandler} de Spring Boot.
- */
 @Component
 @Order(-2)
 public class GlobalErrorWebExceptionHandler extends AbstractErrorWebExceptionHandler {
 
     private static final String ERROR_CODE_BAD_REQUEST = "BAD_REQUEST";
+    private static final String ERROR_CODE_NOT_FOUND = "BOOTCAMP_NOT_FOUND";
     private static final String ERROR_CODE_CAPABILITIES_NOT_FOUND = "CAPABILITIES_NOT_FOUND";
     private static final String ERROR_CODE_BAD_GATEWAY = "CAPABILITY_VALIDATION_UNAVAILABLE";
     private static final String ERROR_CODE_INTERNAL_ERROR = "INTERNAL_ERROR";
@@ -69,11 +52,6 @@ public class GlobalErrorWebExceptionHandler extends AbstractErrorWebExceptionHan
         return RouterFunctions.route(RequestPredicates.all(), this::renderErrorResponse);
     }
 
-    /**
-     * Obtiene el error asociado a la petición desde los {@link ErrorAttributes},
-     * lo traduce a un {@link ErrorResponse} con el código HTTP adecuado y construye
-     * la {@link ServerResponse} JSON de forma no bloqueante.
-     */
     private Mono<ServerResponse> renderErrorResponse(ServerRequest request) {
         Throwable error = getError(request);
         ErrorResponse errorResponse = toErrorResponse(error);
@@ -96,6 +74,18 @@ public class GlobalErrorWebExceptionHandler extends AbstractErrorWebExceptionHan
                     HttpStatus.BAD_REQUEST,
                     invalidPageQuery.getCode().getCode(),
                     invalidPageQuery.getMessage());
+        }
+        if (error instanceof InvalidPathVariableException invalidPathVariable) {
+            return buildErrorResponse(
+                    HttpStatus.BAD_REQUEST,
+                    invalidPathVariable.getCode().getCode(),
+                    invalidPathVariable.getMessage());
+        }
+        if (error instanceof BootcampNotFoundException notFound) {
+            return buildErrorResponse(
+                    HttpStatus.NOT_FOUND,
+                    ERROR_CODE_NOT_FOUND,
+                    notFound.getMessage());
         }
         if (error instanceof CapabilitiesNotFoundException capabilitiesNotFound) {
             return buildErrorResponse(

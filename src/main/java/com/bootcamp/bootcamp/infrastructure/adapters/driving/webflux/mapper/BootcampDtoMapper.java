@@ -19,30 +19,9 @@ import org.springframework.web.reactive.function.server.ServerRequest;
 
 import java.util.List;
 
-/**
- * Mapper puro (sin I/O ni tipos reactivos) que convierte entre los DTOs de la
- * capa driving (WebFlux) y el modelo de dominio {@link Bootcamp}.
- *
- * <p>Las conversiones son transformaciones en memoria; se invocan dentro del
- * pipeline reactivo del handler (por ejemplo con {@code map}), por lo que este
- * componente no conoce Project Reactor ni detalles de HTTP. El modelo de dominio
- * permanece libre de anotaciones de framework.
- */
 @Component
 public class BootcampDtoMapper {
 
-    /**
-     * Convierte un DTO de solicitud en modelo de dominio.
-     *
-     * <p>El {@code id} se fija en {@code null} porque el bootcamp aún no ha sido
-     * persistido. Un {@code durationInDays} nulo se traduce a {@code 0}, valor que
-     * el dominio rechaza con {@code DURATION_INVALID}; así la validación de la
-     * duración vive en el dominio y no en la deserialización. La normalización
-     * (trim) y el resto de validaciones también se realizan en el dominio.
-     *
-     * @param request DTO recibido en la solicitud.
-     * @return el modelo de dominio equivalente con {@code id} nulo.
-     */
     public Bootcamp toDomain(BootcampRequest request) {
         int duration = request.durationInDays() == null ? 0 : request.durationInDays();
         return new Bootcamp(
@@ -54,12 +33,6 @@ public class BootcampDtoMapper {
                 request.capabilityIds());
     }
 
-    /**
-     * Convierte un modelo de dominio ya persistido en DTO de respuesta.
-     *
-     * @param bootcamp modelo de dominio a convertir.
-     * @return el DTO de respuesta equivalente.
-     */
     public BootcampResponse toResponse(Bootcamp bootcamp) {
         return new BootcampResponse(
                 bootcamp.getId(),
@@ -73,17 +46,6 @@ public class BootcampDtoMapper {
     private static final int DEFAULT_PAGE = 0;
     private static final int DEFAULT_SIZE = 10;
 
-    /**
-     * Construye un {@link BootcampPageQuery} de dominio a partir de los query
-     * params de la solicitud, aplicando los defaults (page=0, size=10, sortBy=name,
-     * sortDirection=asc) cuando faltan y traduciendo {@code sortBy}/
-     * {@code sortDirection} a los enums de dominio contra una lista blanca.
-     *
-     * <p>Un {@code page}/{@code size} no numérico o un {@code sortBy}/
-     * {@code sortDirection} fuera de la lista blanca produce una
-     * {@link InvalidPageQueryException} (traducida a 400 por el handler global). El
-     * rango de {@code page}/{@code size} lo valida el caso de uso.
-     */
     public BootcampPageQuery toPageQuery(ServerRequest request) {
         int page = parseIntParam(request, "page", DEFAULT_PAGE);
         int size = parseIntParam(request, "size", DEFAULT_SIZE);
@@ -130,11 +92,6 @@ public class BootcampDtoMapper {
         };
     }
 
-    /**
-     * Convierte el {@link PagedResult} de dominio en el DTO de respuesta paginada,
-     * conservando la metadata, el orden y la cantidad de items, y mapeando el árbol
-     * capacidades→tecnologías de cada item.
-     */
     public BootcampPageResponse toPageResponse(PagedResult<BootcampListItem> pagedResult) {
         List<BootcampListItemResponse> content = pagedResult.getContent().stream()
                 .map(this::toListItemResponse)

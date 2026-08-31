@@ -2,17 +2,6 @@ package com.bootcamp.bootcamp.domain.model;
 
 import java.util.List;
 
-/**
- * Contenedor genérico e inmutable de una página de resultados.
- *
- * <p>Incluye la metadata de paginación ({@code page}, {@code size},
- * {@code totalElements}, {@code totalPages}) y el contenido de la página. El
- * {@code totalPages} se deriva en el constructor como el techo de
- * {@code totalElements / size}, de modo que la metadata siempre es coherente,
- * incluso cuando el contenido es vacío por una página fuera de rango.
- *
- * @param <T> tipo de los elementos del contenido de la página.
- */
 public final class PagedResult<T> {
 
     private final int page;

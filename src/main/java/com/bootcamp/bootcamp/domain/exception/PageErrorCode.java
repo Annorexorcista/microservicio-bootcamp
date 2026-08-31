@@ -1,13 +1,5 @@
 package com.bootcamp.bootcamp.domain.exception;
 
-/**
- * Códigos de error de negocio para la validación de los parámetros de
- * paginación y ordenamiento del listado de bootcamps.
- *
- * <p>Centraliza los mensajes libres de acoplamiento HTTP. El handler global
- * traduce {@link InvalidPageQueryException} (que porta uno de estos códigos) a
- * un 400 Bad Request.
- */
 public enum PageErrorCode {
 
     PAGE_NEGATIVE("El parámetro page debe ser mayor o igual a 0"),

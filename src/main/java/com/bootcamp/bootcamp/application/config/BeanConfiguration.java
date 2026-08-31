@@ -17,15 +17,6 @@ import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.transaction.reactive.TransactionalOperator;
 import org.springframework.web.reactive.function.client.WebClient;
 
-/**
- * Cableado (wiring) de la arquitectura hexagonal.
- *
- * <p>Concentra en la capa de aplicación la construcción de los beans del dominio
- * y sus adaptadores, de modo que el núcleo ({@link BootcampUseCase},
- * {@link com.bootcamp.bootcamp.domain.model.Bootcamp} y los puertos) y los
- * adaptadores driven permanecen como clases planas, libres de anotaciones de
- * Spring ({@code @Component}). Replica el enfoque de {@code microservicio_capacidad}.
- */
 @Configuration
 public class BeanConfiguration {
 
