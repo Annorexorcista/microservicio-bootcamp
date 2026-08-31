@@ -7,16 +7,6 @@ import reactor.core.publisher.Mono;
 
 import java.util.Collection;
 
-/**
- * Repositorio reactivo R2DBC para la tabla puente {@link BootcampCapabilityEntity}.
- *
- * <p>La entidad no tiene un {@code @Id} de una sola columna (la clave primaria de
- * la tabla es compuesta), por lo que este repositorio se tipa con {@link Long}
- * como identificador nominal pero NO se usa para {@code save}/{@code findById}
- * basados en id. La inserción de las filas del join la realiza el adaptador de
- * persistencia con {@code R2dbcEntityTemplate#insert}. Aquí se expone únicamente
- * una derived query de solo lectura para recuperar las asociaciones de un bootcamp.
- */
 public interface IBootcampCapabilityRepository
         extends ReactiveCrudRepository<BootcampCapabilityEntity, Long> {
 

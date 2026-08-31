@@ -3,15 +3,6 @@ package com.bootcamp.bootcamp.domain.model;
 import java.time.LocalDate;
 import java.util.List;
 
-/**
- * Bootcamp enriquecido para el listado: incluye, además de sus datos básicos, el
- * listado de sus capacidades ({@link CapabilitySummary}), cada una con sus
- * tecnologías (id y nombre).
- *
- * <p>El caso de uso lo construye tras enriquecer cada bootcamp de la página con
- * los datos de sus capacidades resueltos mediante la llamada por lotes al
- * Capability_Service.
- */
 public final class BootcampListItem {
 
     private final Long id;

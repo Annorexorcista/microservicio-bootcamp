@@ -24,18 +24,6 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/**
- * Caso de uso del dominio para el registro de bootcamps.
- *
- * <p>Implementa {@link IBootcampServicePort} y concentra las reglas de negocio
- * como un pipeline reactivo. Cada paso transforma/valida produciendo un
- * {@link Mono} de éxito o un {@code Mono.error(...)} de fallo, de modo que un
- * error corta el pipeline sin persistir nada. No usa {@code .block()}.
- *
- * <p>Depende de dos puertos de salida: {@link IBootcampPersistencePort} para la
- * persistencia y {@link ICapabilityGatewayPort} para validar la existencia de las
- * capacidades asociadas.
- */
 public class BootcampUseCase implements IBootcampServicePort {
 
     private static final int NAME_MAX_LENGTH = 50;
@@ -62,22 +50,6 @@ public class BootcampUseCase implements IBootcampServicePort {
                 .flatMap(persistencePort::save);
     }
 
-    /**
-     * Lista los bootcamps de forma paginada y ordenada, componiendo un único
-     * pipeline reactivo sin llamadas bloqueantes:
-     * <ol>
-     *   <li>valida el rango de {@code page}/{@code size} (Req 4.3-4.6);</li>
-     *   <li>obtiene, en paralelo, la página desde la BD (ya ordenada y paginada) y
-     *       el conteo total (Req 1.1, 1.2);</li>
-     *   <li>si la página está vacía, omite el gateway y retorna un
-     *       {@link PagedResult} vacío con la metadata coherente (Req 1.4, 5.6);</li>
-     *   <li>en caso contrario, enriquece cada bootcamp con sus capacidades y
-     *       tecnologías mediante una única llamada por lotes (Req 5).</li>
-     * </ol>
-     *
-     * <p>El orden emitido por {@code findPage} se preserva. El error de
-     * indisponibilidad del Capability_Service se propaga sin capturarse (Req 7.1).
-     */
     @Override
     public Mono<PagedResult<BootcampListItem>> listBootcamps(BootcampPageQuery query) {
         return validateQuery(query)
@@ -99,14 +71,6 @@ public class BootcampUseCase implements IBootcampServicePort {
                         }));
     }
 
-    /**
-     * Elimina el bootcamp y, en cascada, las capacidades que queden huérfanas.
-     * Verifica que el bootcamp exista (si no, emite {@link BootcampNotFoundException}
-     * → 404); la persistencia borra el bootcamp y sus asociaciones de forma
-     * transaccional y devuelve las capacidades huérfanas; esas se eliminan en el
-     * microservicio de Capacidad a través del gateway (que a su vez borra en
-     * cascada las tecnologías huérfanas). Sin {@code .block()}.
-     */
     @Override
     public Mono<Void> deleteBootcamp(Long id) {
         return persistencePort.existsById(id)
@@ -118,13 +82,6 @@ public class BootcampUseCase implements IBootcampServicePort {
                         : capabilityGatewayPort.deleteCapabilitiesByIds(orphanCapabilityIds));
     }
 
-    /**
-     * Valida el rango de los parámetros de paginación en memoria (sin I/O):
-     * {@code page < 0} -> {@code PAGE_NEGATIVE}; {@code size < 1} ->
-     * {@code SIZE_TOO_SMALL}; {@code size > 100} -> {@code SIZE_TOO_LARGE}. Los
-     * valores de {@code sortBy}/{@code direction} ya llegan resueltos a enum (o al
-     * default) desde la capa driving.
-     */
     private Mono<BootcampPageQuery> validateQuery(BootcampPageQuery query) {
         return Mono.defer(() -> {
             if (query.getPage() < MIN_PAGE) {
@@ -140,14 +97,6 @@ public class BootcampUseCase implements IBootcampServicePort {
         });
     }
 
-    /**
-     * Enriquece los bootcamps de la página con sus capacidades y tecnologías,
-     * evitando el problema N+1: recolecta todos los {@code capabilityId} distintos
-     * de la página (preservando el orden de aparición) y hace una única llamada por
-     * lotes al gateway; con el mapa {@code id -> CapabilitySummary} resultante,
-     * asocia a cada bootcamp únicamente las capacidades resueltas (omitiendo las no
-     * devueltas por el service, Req 5.5), preservando el orden de la página.
-     */
     private Mono<List<BootcampListItem>> enrichWithCapabilities(List<Bootcamp> page) {
         Set<Long> distinctIds = page.stream()
                 .flatMap(b -> b.getCapabilityIds().stream())
@@ -166,24 +115,6 @@ public class BootcampUseCase implements IBootcampServicePort {
                         .toList());
     }
 
-    /**
-     * Normaliza y valida sintácticamente el bootcamp en memoria (sin I/O):
-     * <ol>
-     *   <li>trim de nombre y descripción;</li>
-     *   <li>nombre obligatorio y de longitud ≤ 50 (Req 2.1, 2.2);</li>
-     *   <li>descripción obligatoria y de longitud ≤ 90 (Req 3.1, 3.2);</li>
-     *   <li>fecha de lanzamiento obligatoria (Req 4.1);</li>
-     *   <li>duración en días > 0 (Req 4.2);</li>
-     *   <li>normaliza los ids de capacidad descartando nulls y detecta repetidos
-     *       comparando el tamaño de la lista con el de los distintos (Req 6.1);</li>
-     *   <li>valida la cantidad de distintos: mínimo 1 y máximo 4 (Req 5.1, 5.2);</li>
-     *   <li>emite un {@link Bootcamp} normalizado (trim + ids distintos, {@code id == null}).</li>
-     * </ol>
-     *
-     * @param bootcamp bootcamp de entrada tal como llega desde la capa driving.
-     * @return un {@link Mono} que emite el bootcamp normalizado o un
-     *         {@link InvalidBootcampDataException} si alguna regla falla.
-     */
     private Mono<Bootcamp> validate(Bootcamp bootcamp) {
         return Mono.defer(() -> {
             String name = bootcamp.getName() == null ? null : bootcamp.getName().trim();
@@ -246,22 +177,6 @@ public class BootcampUseCase implements IBootcampServicePort {
         });
     }
 
-    /**
-     * Valida que todas las capacidades asociadas existan en el Capability_Service,
-     * consultando el gateway (Req 7.1). Calcula los identificadores faltantes
-     * comparando los solicitados contra el conjunto de existentes devuelto por el
-     * gateway; si hay al menos uno faltante, rechaza el registro con
-     * {@link CapabilitiesNotFoundException} sin persistir (Req 7.2). Si todas
-     * existen, continúa el proceso (Req 7.3).
-     *
-     * <p>La indisponibilidad del Capability_Service se traduce a
-     * {@code CapabilityValidationUnavailableException} en el adaptador del gateway
-     * (vía {@code onErrorMap}); aquí simplemente se propaga el error sin capturarlo.
-     *
-     * @param bootcamp bootcamp ya normalizado y validado sintácticamente.
-     * @return un {@link Mono} que emite el bootcamp si todas las capacidades
-     *         existen, o un error que corta el pipeline.
-     */
     private Mono<Bootcamp> ensureCapabilitiesExist(Bootcamp bootcamp) {
         List<Long> requested = bootcamp.getCapabilityIds();
         return capabilityGatewayPort.findExistingCapabilityIds(requested)
